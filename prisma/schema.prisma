@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum VoteTargetType {
+  QUESTION
+  ANSWER
+}
+
+enum VoteValue {
+  UP
+  DOWN
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  username     String     @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  questions    Question[]
+  answers      Answer[]
+  comments     Comment[]
+  votes        Vote[]
+}
+
+model Question {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  tags        Json?
+  authorId    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  answers     Answer[]
+  comments    Comment[]
+  votes       Vote[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Answer {
+  id         String    @id @default(cuid())
+  content    String
+  questionId String
+  authorId   String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments   Comment[]
+  votes      Vote[]
+
+  @@index([questionId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  content    String
+  authorId   String
+  questionId String?
+  answerId   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  question   Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer     Answer?   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+  @@index([questionId])
+  @@index([answerId])
+  @@index([createdAt])
+}
+
+model Vote {
+  id         String         @id @default(cuid())
+  userId     String
+  targetType VoteTargetType
+  value      VoteValue
+  questionId String?
+  answerId   String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question?      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer     Answer?        @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@unique([userId, answerId])
+  @@index([targetType])
+  @@index([questionId])
+  @@index([answerId])
+}

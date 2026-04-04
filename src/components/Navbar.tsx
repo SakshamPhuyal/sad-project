@@ -10,9 +10,20 @@ export default function Navbar() {
           Q&A Platform System
         </Link>
 
-        <Link href="/ask" className="bg-blue-500 text-white px-4 py-2 rounded">
-          Ask Question
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className="border border-blue-500 text-blue-600 px-4 py-2 rounded"
+          >
+            Login
+          </Link>
+          <Link
+            href="/ask"
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+          >
+            Ask Question
+          </Link>
+        </div>
       </div>
     </div>
   );
