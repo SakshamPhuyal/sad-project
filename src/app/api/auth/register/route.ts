@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 
 import {
   AUTH_TOKEN_NAME,
@@ -8,6 +7,10 @@ import {
   hashPassword,
 } from "@/src/lib/auth";
 import { prisma } from "@/src/lib/prisma";
+
+type PrismaLikeKnownError = {
+  code?: string;
+};
 
 export async function POST(request: Request) {
   try {
@@ -66,8 +69,9 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      typeof error === "object" &&
+      error !== null &&
+      (error as PrismaLikeKnownError).code === "P2002"
     ) {
       return NextResponse.json(
         { success: false, message: "email or username already exists" },
