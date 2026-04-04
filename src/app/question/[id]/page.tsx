@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import Navbar from "@/src/components/Navbar";
 import VoteButtons from "../../../components/VoteButtons";
 import { useQnA } from "@/src/context/QnAContext";
@@ -56,7 +57,9 @@ export default function QuestionPage() {
   const submitComment = async (answerId: string) => {
     if (!question) return;
     if (!currentUser) {
-      updateCommentDraft(answerId, { error: "Please login to comment." });
+      const message = "Please login to comment.";
+      updateCommentDraft(answerId, { error: message });
+      toast.info(message);
       return;
     }
 
@@ -64,18 +67,23 @@ export default function QuestionPage() {
     const text = draft.text.trim();
 
     if (!text) {
-      updateCommentDraft(answerId, { error: "Please add a comment." });
+      const message = "Please add a comment.";
+      updateCommentDraft(answerId, { error: message });
+      toast.warn(message);
       return;
     }
 
     const result = await addComment({ aid: answerId, text });
     if (!result.ok) {
+      const message = result.message || "Failed to post comment.";
       updateCommentDraft(answerId, {
-        error: result.message || "Failed to post comment.",
+        error: message,
       });
+      toast.error(message);
       return;
     }
 
+    toast.success("Comment posted");
     updateCommentDraft(answerId, { text: "", error: "" });
   };
 
@@ -94,32 +102,39 @@ export default function QuestionPage() {
     if (!question) return;
 
     if (!currentUser) {
+      const message = "Please login to comment.";
       setQuestionComment((prev) => ({
         ...prev,
-        error: "Please login to comment.",
+        error: message,
       }));
+      toast.info(message);
       return;
     }
 
     const text = questionComment.text.trim();
 
     if (!text) {
+      const message = "Please add a comment.";
       setQuestionComment((prev) => ({
         ...prev,
-        error: "Please add a comment.",
+        error: message,
       }));
+      toast.warn(message);
       return;
     }
 
     const result = await addComment({ qid: question.id, text });
     if (!result.ok) {
+      const message = result.message || "Failed to post comment.";
       setQuestionComment((prev) => ({
         ...prev,
-        error: result.message || "Failed to post comment.",
+        error: message,
       }));
+      toast.error(message);
       return;
     }
 
+    toast.success("Comment posted");
     setQuestionComment({ text: "", error: "" });
   };
 
@@ -191,7 +206,14 @@ export default function QuestionPage() {
                   votes={question.votes}
                   disabled={!currentUser}
                   onVote={(value) => {
-                    void voteQuestion(question.id, value);
+                    void (async () => {
+                      const result = await voteQuestion(question.id, value);
+                      if (!result.ok) {
+                        toast.error(result.message || "Failed to submit vote");
+                        return;
+                      }
+                      toast.success("Vote updated");
+                    })();
                   }}
                 />
               </div>
@@ -343,7 +365,16 @@ export default function QuestionPage() {
                         votes={ans.votes}
                         disabled={!currentUser}
                         onVote={(value) => {
-                          void voteAnswer(ans.id, value);
+                          void (async () => {
+                            const result = await voteAnswer(ans.id, value);
+                            if (!result.ok) {
+                              toast.error(
+                                result.message || "Failed to submit vote",
+                              );
+                              return;
+                            }
+                            toast.success("Vote updated");
+                          })();
                         }}
                       />
                       <div className="flex-1">

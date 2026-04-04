@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "react-toastify";
 
 import {
   Card,
@@ -48,14 +49,19 @@ export default function LoginPage() {
 
       const data = await response.json();
       if (!response.ok || !data?.success) {
-        setError(data?.message || "Login failed");
+        const message = data?.message || "Login failed";
+        setError(message);
+        toast.error(message);
         return;
       }
 
+      toast.success("Logged in successfully");
       router.push("/");
       router.refresh();
     } catch {
-      setError("Something went wrong. Please try again.");
+      const message = "Something went wrong. Please try again.";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

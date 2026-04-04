@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import Navbar from "@/src/components/Navbar";
 import { useQnA } from "@/src/context/QnAContext";
 
@@ -26,12 +27,16 @@ export default function PostAnswerPage() {
 
     if (!question) return;
     if (!currentUser) {
-      setFormError("Please login to post an answer.");
+      const message = "Please login to post an answer.";
+      setFormError(message);
+      toast.info(message);
       return;
     }
 
     if (!answer.trim()) {
-      setFormError("Please write your answer before posting.");
+      const message = "Please write your answer before posting.";
+      setFormError(message);
+      toast.warn(message);
       return;
     }
 
@@ -40,10 +45,13 @@ export default function PostAnswerPage() {
     setSubmitting(false);
 
     if (!result.ok) {
-      setFormError(result.message || "Failed to post answer.");
+      const message = result.message || "Failed to post answer.";
+      setFormError(message);
+      toast.error(message);
       return;
     }
 
+    toast.success("Answer posted successfully");
     router.push(`/question/${question.id}`);
   };
 

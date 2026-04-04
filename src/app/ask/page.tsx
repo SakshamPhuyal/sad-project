@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "react-toastify";
 import Navbar from "@/src/components/Navbar";
 import { useQnA } from "@/src/context/QnAContext";
 
@@ -21,12 +22,16 @@ export default function AskPage() {
     setError("");
 
     if (!currentUser) {
-      setError("Please login to post a question.");
+      const message = "Please login to post a question.";
+      setError(message);
+      toast.info(message);
       return;
     }
 
     if (!title.trim() || !desc.trim()) {
-      setError("Please fill in title and description.");
+      const message = "Please fill in title and description.";
+      setError(message);
+      toast.warn(message);
       return;
     }
 
@@ -45,10 +50,13 @@ export default function AskPage() {
     setSubmitting(false);
 
     if (!result.ok) {
-      setError(result.message || "Failed to post question.");
+      const message = result.message || "Failed to post question.";
+      setError(message);
+      toast.error(message);
       return;
     }
 
+    toast.success("Question posted successfully");
     router.push("/");
   };
 
