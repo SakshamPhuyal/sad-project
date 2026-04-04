@@ -3,142 +3,209 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Question } from "@/src/types/type";
 
+type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string | null;
+};
+
 interface ContextType {
   questions: Question[];
-  addQuestion: (q: Question) => void;
-  addAnswer: (qid: string, text: string, author: string) => void;
-  addComment: (qid: string, aid: string, text: string, author: string) => void;
-  addQuestionComment: (qid: string, text: string, author: string) => void;
-  voteQuestion: (id: string, val: number) => void;
-  voteAnswer: (qid: string, aid: string, val: number) => void; // ✅ Must be here
+  loading: boolean;
+  currentUser: AuthUser | null;
+  addQuestion: (payload: {
+    title: string;
+    description: string;
+    tags: string[];
+  }) => Promise<{ ok: boolean; message?: string }>;
+  addAnswer: (
+    qid: string,
+    text: string,
+  ) => Promise<{ ok: boolean; message?: string }>;
+  addComment: (payload: {
+    qid?: string;
+    aid?: string;
+    text: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
+  voteQuestion: (
+    id: string,
+    value: "UP" | "DOWN",
+  ) => Promise<{ ok: boolean; message?: string }>;
+  voteAnswer: (
+    aid: string,
+    value: "UP" | "DOWN",
+  ) => Promise<{ ok: boolean; message?: string }>;
+  refreshQuestions: () => Promise<void>;
+  refreshMe: () => Promise<void>;
 }
 
 const QnAContext = createContext<ContextType | null>(null);
 
 export const QnAProvider = ({ children }: { children: React.ReactNode }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
-  const normalizeQuestions = (data: Question[]) =>
-    data.map((q) => ({
-      ...q,
-      comments: q.comments ?? [],
-      answers: (q.answers ?? []).map((a) => ({
-        ...a,
-        comments: a.comments ?? [],
-      })),
-    }));
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = localStorage.getItem("questions");
-    if (!saved) return;
+  const normalizeQuestions = (data: Question[] = []) => {
     try {
-      const parsed = JSON.parse(saved);
-      setQuestions(normalizeQuestions(parsed));
+      return data.map((q) => ({
+        ...q,
+        comments: q.comments ?? [],
+        answers: (q.answers ?? []).map((a) => ({
+          ...a,
+          comments: a.comments ?? [],
+        })),
+      }));
     } catch {
-      setQuestions([]);
-    }
-  }, []);
-
-  const save = (data: Question[]) => {
-    const normalized = normalizeQuestions(data);
-    setQuestions(normalized);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("questions", JSON.stringify(normalized));
+      return [];
     }
   };
 
-  const addQuestion = (q: Question) =>
-    save([...questions, { ...q, comments: q.comments ?? [] }]);
+  const refreshQuestions = async () => {
+    const response = await fetch("/api/questions", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (response.ok && data?.success) {
+      setQuestions(normalizeQuestions(data.data));
+    }
+  };
 
-  const voteQuestion = (id: string, val: number) =>
-    save(
-      questions.map((q) => (q.id === id ? { ...q, votes: q.votes + val } : q)),
-    );
+  const refreshMe = async () => {
+    const response = await fetch("/api/auth/me", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (response.ok && data?.success) {
+      setCurrentUser(data.user);
+      return;
+    }
+    setCurrentUser(null);
+  };
 
-  const addAnswer = (qid: string, text: string, author: string) =>
-    save(
-      questions.map((q) =>
-        q.id === qid
-          ? {
-              ...q,
-              answers: [
-                ...q.answers,
-                {
-                  id: Date.now().toString(),
-                  text,
-                  author,
-                  votes: 0,
-                  comments: [],
-                },
-              ],
-            }
-          : q,
-      ),
-    );
+  useEffect(() => {
+    const initialize = async () => {
+      setLoading(true);
+      await Promise.all([refreshQuestions(), refreshMe()]);
+      setLoading(false);
+    };
+    void initialize();
+  }, []);
 
-  const addComment = (qid: string, aid: string, text: string, author: string) =>
-    save(
-      questions.map((q) =>
-        q.id === qid
-          ? {
-              ...q,
-              answers: q.answers.map((a) =>
-                a.id === aid
-                  ? {
-                      ...a,
-                      comments: [
-                        ...a.comments,
-                        { id: Date.now().toString(), text, author },
-                      ],
-                    }
-                  : a,
-              ),
-            }
-          : q,
-      ),
-    );
+  const addQuestion = async (payload: {
+    title: string;
+    description: string;
+    tags: string[];
+  }) => {
+    const response = await fetch("/api/questions", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const addQuestionComment = (qid: string, text: string, author: string) =>
-    save(
-      questions.map((q) =>
-        q.id === qid
-          ? {
-              ...q,
-              comments: [
-                ...(q.comments ?? []),
-                { id: Date.now().toString(), text, author },
-              ],
-            }
-          : q,
-      ),
-    );
+    const data = await response.json();
+    if (!response.ok || !data?.success) {
+      return { ok: false, message: data?.message || "Failed to post question" };
+    }
 
-  // ✅ Vote answer and sort by votes descending
-  const voteAnswer = (qid: string, aid: string, val: number) =>
-    save(
-      questions.map((q) =>
-        q.id === qid
-          ? {
-              ...q,
-              answers: q.answers
-                .map((a) => (a.id === aid ? { ...a, votes: a.votes + val } : a))
-                .sort((a, b) => b.votes - a.votes),
-            }
-          : q,
-      ),
-    );
+    await refreshQuestions();
+    return { ok: true };
+  };
+
+  const addAnswer = async (qid: string, text: string) => {
+    const response = await fetch(`/api/questions/${qid}/answers`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: text }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data?.success) {
+      return { ok: false, message: data?.message || "Failed to post answer" };
+    }
+
+    await refreshQuestions();
+    return { ok: true };
+  };
+
+  const addComment = async (payload: {
+    qid?: string;
+    aid?: string;
+    text: string;
+  }) => {
+    const response = await fetch("/api/comments", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: payload.text,
+        questionId: payload.qid,
+        answerId: payload.aid,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data?.success) {
+      return { ok: false, message: data?.message || "Failed to post comment" };
+    }
+
+    await refreshQuestions();
+    return { ok: true };
+  };
+
+  const submitVote = async (
+    targetType: "QUESTION" | "ANSWER",
+    targetId: string,
+    value: "UP" | "DOWN",
+  ) => {
+    const response = await fetch("/api/votes", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ targetType, targetId, value }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data?.success) {
+      return { ok: false, message: data?.message || "Failed to submit vote" };
+    }
+
+    await refreshQuestions();
+    return { ok: true };
+  };
+
+  const voteQuestion = async (id: string, value: "UP" | "DOWN") =>
+    submitVote("QUESTION", id, value);
+
+  const voteAnswer = async (aid: string, value: "UP" | "DOWN") =>
+    submitVote("ANSWER", aid, value);
 
   return (
     <QnAContext.Provider
       value={{
         questions,
+        loading,
+        currentUser,
         addQuestion,
         addAnswer,
         addComment,
-        addQuestionComment,
         voteQuestion,
         voteAnswer,
+        refreshQuestions,
+        refreshMe,
       }}
     >
       {children}

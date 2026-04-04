@@ -2,25 +2,31 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Navbar from "@/src/components/Navbar";
 import { useQnA } from "@/src/context/QnAContext";
 
 export default function AskPage() {
   const router = useRouter();
-  const { addQuestion } = useQnA();
+  const { addQuestion, currentUser } = useQnA();
 
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [tags, setTags] = useState("");
-  const [author, setAuthor] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
-    if (!author.trim() || !title.trim() || !desc.trim()) {
-      setError("Please fill in your name, title, and description.");
+    if (!currentUser) {
+      setError("Please login to post a question.");
+      return;
+    }
+
+    if (!title.trim() || !desc.trim()) {
+      setError("Please fill in title and description.");
       return;
     }
 
@@ -29,16 +35,19 @@ export default function AskPage() {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    addQuestion({
-      id: Date.now().toString(),
+    setSubmitting(true);
+    const result = await addQuestion({
       title: title.trim(),
       description: desc.trim(),
-      author: author.trim(),
       tags: parsedTags,
-      votes: 0,
-      answers: [],
-      comments: [],
     });
+
+    setSubmitting(false);
+
+    if (!result.ok) {
+      setError(result.message || "Failed to post question.");
+      return;
+    }
 
     router.push("/");
   };
@@ -58,17 +67,15 @@ export default function AskPage() {
           </div>
 
           <form onSubmit={submit} className="mt-8 space-y-5">
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Your name
-              </label>
-              <input
-                placeholder="Jane Doe"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-              />
-            </div>
+            {!currentUser && (
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                You need to be logged in to post. Please{" "}
+                <Link href="/login" className="font-semibold underline">
+                  login
+                </Link>
+                .
+              </p>
+            )}
 
             <div>
               <label className="text-sm font-semibold text-slate-700">
@@ -114,9 +121,10 @@ export default function AskPage() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="submit"
+                disabled={!currentUser || submitting}
                 className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
               >
-                Post question
+                {submitting ? "Posting..." : "Post question"}
               </button>
               <span className="text-xs text-slate-500">
                 Be respectful and include enough details for others to help.

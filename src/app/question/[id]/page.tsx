@@ -10,20 +10,14 @@ import { useQnA } from "@/src/context/QnAContext";
 export default function QuestionPage() {
   const params = useParams<{ id: string }>();
   const questionId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const {
-    questions,
-    addComment,
-    addQuestionComment,
-    voteAnswer,
-    voteQuestion,
-  } = useQnA();
+  const { questions, addComment, currentUser, voteAnswer, voteQuestion } =
+    useQnA();
   const [showAnswers, setShowAnswers] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState<
-    Record<string, { text: string; author: string; error: string }>
+    Record<string, { text: string; error: string }>
   >({});
   const [questionComment, setQuestionComment] = useState({
     text: "",
-    author: "",
     error: "",
   });
 
@@ -51,33 +45,38 @@ export default function QuestionPage() {
 
   const updateCommentDraft = (
     answerId: string,
-    next: Partial<{ text: string; author: string; error: string }>,
+    next: Partial<{ text: string; error: string }>,
   ) => {
     setCommentDrafts((prev) => {
-      const current = prev[answerId] ?? { text: "", author: "", error: "" };
+      const current = prev[answerId] ?? { text: "", error: "" };
       return { ...prev, [answerId]: { ...current, ...next } };
     });
   };
 
-  const submitComment = (answerId: string) => {
+  const submitComment = async (answerId: string) => {
     if (!question) return;
-    const draft = commentDrafts[answerId] ?? {
-      text: "",
-      author: "",
-      error: "",
-    };
-    const name = draft.author.trim();
+    if (!currentUser) {
+      updateCommentDraft(answerId, { error: "Please login to comment." });
+      return;
+    }
+
+    const draft = commentDrafts[answerId] ?? { text: "", error: "" };
     const text = draft.text.trim();
 
-    if (!name || !text) {
+    if (!text) {
+      updateCommentDraft(answerId, { error: "Please add a comment." });
+      return;
+    }
+
+    const result = await addComment({ aid: answerId, text });
+    if (!result.ok) {
       updateCommentDraft(answerId, {
-        error: "Please add your name and comment.",
+        error: result.message || "Failed to post comment.",
       });
       return;
     }
 
-    addComment(question.id, answerId, text, name);
-    updateCommentDraft(answerId, { text: "", author: "", error: "" });
+    updateCommentDraft(answerId, { text: "", error: "" });
   };
 
   const handleViewAnswers = () => {
@@ -88,23 +87,40 @@ export default function QuestionPage() {
     }
   };
 
-  const submitQuestionComment = (event: React.FormEvent<HTMLFormElement>) => {
+  const submitQuestionComment = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     if (!question) return;
 
-    const name = questionComment.author.trim();
-    const text = questionComment.text.trim();
-
-    if (!name || !text) {
+    if (!currentUser) {
       setQuestionComment((prev) => ({
         ...prev,
-        error: "Please add your name and comment.",
+        error: "Please login to comment.",
       }));
       return;
     }
 
-    addQuestionComment(question.id, text, name);
-    setQuestionComment({ text: "", author: "", error: "" });
+    const text = questionComment.text.trim();
+
+    if (!text) {
+      setQuestionComment((prev) => ({
+        ...prev,
+        error: "Please add a comment.",
+      }));
+      return;
+    }
+
+    const result = await addComment({ qid: question.id, text });
+    if (!result.ok) {
+      setQuestionComment((prev) => ({
+        ...prev,
+        error: result.message || "Failed to post comment.",
+      }));
+      return;
+    }
+
+    setQuestionComment({ text: "", error: "" });
   };
 
   useEffect(() => {
@@ -173,7 +189,10 @@ export default function QuestionPage() {
               <div className="shrink-0">
                 <VoteButtons
                   votes={question.votes}
-                  onVote={(delta: number) => voteQuestion(question.id, delta)}
+                  disabled={!currentUser}
+                  onVote={(value) => {
+                    void voteQuestion(question.id, value);
+                  }}
                 />
               </div>
               <div className="flex-1">
@@ -258,20 +277,8 @@ export default function QuestionPage() {
               className="mt-5 grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)_auto]"
             >
               <input
-                placeholder="Name"
-                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                value={questionComment.author}
-                onChange={(event) =>
-                  setQuestionComment((prev) => ({
-                    ...prev,
-                    author: event.target.value,
-                    error: "",
-                  }))
-                }
-              />
-              <input
                 placeholder="Add a comment"
-                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none sm:col-span-2"
                 value={questionComment.text}
                 onChange={(event) =>
                   setQuestionComment((prev) => ({
@@ -283,11 +290,17 @@ export default function QuestionPage() {
               />
               <button
                 type="submit"
+                disabled={!currentUser}
                 className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
               >
                 Comment
               </button>
             </form>
+            {!currentUser && (
+              <p className="mt-2 text-xs text-amber-700">
+                Login required for posting comments and votes.
+              </p>
+            )}
             {questionComment.error && (
               <p className="mt-2 text-sm text-rose-600">
                 {questionComment.error}
@@ -317,7 +330,6 @@ export default function QuestionPage() {
               {sortedAnswers.map((ans) => {
                 const draft = commentDrafts[ans.id] ?? {
                   text: "",
-                  author: "",
                   error: "",
                 };
 
@@ -329,9 +341,10 @@ export default function QuestionPage() {
                     <div className="flex flex-col gap-4 md:flex-row md:items-start">
                       <VoteButtons
                         votes={ans.votes}
-                        onVote={(delta: number) =>
-                          voteAnswer(question.id, ans.id, delta)
-                        }
+                        disabled={!currentUser}
+                        onVote={(value) => {
+                          void voteAnswer(ans.id, value);
+                        }}
                       />
                       <div className="flex-1">
                         <p className="text-sm text-slate-700 leading-relaxed">
@@ -371,21 +384,10 @@ export default function QuestionPage() {
                         <form
                           onSubmit={(event) => {
                             event.preventDefault();
-                            submitComment(ans.id);
+                            void submitComment(ans.id);
                           }}
-                          className="mt-4 grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_auto]"
+                          className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
                         >
-                          <input
-                            placeholder="Name"
-                            className="w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-                            value={draft.author}
-                            onChange={(event) =>
-                              updateCommentDraft(ans.id, {
-                                author: event.target.value,
-                                error: "",
-                              })
-                            }
-                          />
                           <input
                             placeholder="Add a comment"
                             className="w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
@@ -399,11 +401,17 @@ export default function QuestionPage() {
                           />
                           <button
                             type="submit"
+                            disabled={!currentUser}
                             className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
                           >
                             Comment
                           </button>
                         </form>
+                        {!currentUser && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            Login required for posting comments and votes.
+                          </p>
+                        )}
                         {draft.error && (
                           <p className="mt-2 text-xs text-rose-600">
                             {draft.error}

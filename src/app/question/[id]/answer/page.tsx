@@ -10,9 +10,9 @@ export default function PostAnswerPage() {
   const params = useParams<{ id: string }>();
   const questionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
-  const { questions, addAnswer } = useQnA();
-  const [author, setAuthor] = useState("");
+  const { questions, addAnswer, currentUser } = useQnA();
   const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
   const question = useMemo(
@@ -20,17 +20,30 @@ export default function PostAnswerPage() {
     [questions, questionId],
   );
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
 
     if (!question) return;
-    if (!author.trim() || !answer.trim()) {
-      setFormError("Please add your name and answer before posting.");
+    if (!currentUser) {
+      setFormError("Please login to post an answer.");
       return;
     }
 
-    addAnswer(question.id, answer.trim(), author.trim());
+    if (!answer.trim()) {
+      setFormError("Please write your answer before posting.");
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await addAnswer(question.id, answer.trim());
+    setSubmitting(false);
+
+    if (!result.ok) {
+      setFormError(result.message || "Failed to post answer.");
+      return;
+    }
+
     router.push(`/question/${question.id}`);
   };
 
@@ -91,12 +104,15 @@ export default function PostAnswerPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <input
-              placeholder="Your name"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-              value={author}
-              onChange={(event) => setAuthor(event.target.value)}
-            />
+            {!currentUser && (
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                You need to be logged in to answer. Please{" "}
+                <Link href="/login" className="font-semibold underline">
+                  login
+                </Link>
+                .
+              </p>
+            )}
             <textarea
               placeholder="Write your answer here"
               className="min-h-40 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
@@ -106,9 +122,10 @@ export default function PostAnswerPage() {
             {formError && <p className="text-sm text-rose-600">{formError}</p>}
             <button
               type="submit"
+              disabled={!currentUser || submitting}
               className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
             >
-              Post answer
+              {submitting ? "Posting..." : "Post answer"}
             </button>
           </form>
         </section>
