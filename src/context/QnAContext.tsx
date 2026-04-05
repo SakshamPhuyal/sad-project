@@ -14,6 +14,7 @@ interface ContextType {
   questions: Question[];
   loading: boolean;
   currentUser: AuthUser | null;
+  setCurrentAuthUser: (user: AuthUser | null) => void;
   addQuestion: (payload: {
     title: string;
     description: string;
@@ -193,12 +194,17 @@ export const QnAProvider = ({ children }: { children: React.ReactNode }) => {
   const voteAnswer = async (aid: string, value: "UP" | "DOWN") =>
     submitVote("ANSWER", aid, value);
 
+  const setCurrentAuthUser = (user: AuthUser | null) => {
+    setCurrentUser(user);
+  };
+
   return (
     <QnAContext.Provider
       value={{
         questions,
         loading,
         currentUser,
+        setCurrentAuthUser,
         addQuestion,
         addAnswer,
         addComment,

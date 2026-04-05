@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/src/components/ui/card";
+import { useQnA } from "@/src/context/QnAContext";
 
 type LoginFormValues = {
   identifier: string;
@@ -22,6 +23,7 @@ type LoginFormValues = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { setCurrentAuthUser } = useQnA();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const {
@@ -55,9 +57,11 @@ export default function LoginPage() {
         return;
       }
 
+      setCurrentAuthUser(data.user ?? null);
       toast.success("Logged in successfully");
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
       router.push("/");
-      router.refresh();
     } catch {
       const message = "Something went wrong. Please try again.";
       setError(message);
